@@ -1,4 +1,5 @@
 import org.gradle.api.DefaultTask
+import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
@@ -19,7 +20,11 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.net.URI
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.Properties
+import java.util.zip.ZipFile
 import javax.inject.Inject
 
 abstract class GenerateRuntimeConfigsTask : DefaultTask() {
@@ -434,6 +439,32 @@ fun newestDirectory(root: File): File? =
         ?.listFiles(File::isDirectory)
         ?.maxByOrNull { semanticVersionSortKey(it.name) }
 
+fun isUsableNativeBinary(file: File): Boolean =
+    file.isFile && file.length() > 1_000_000L
+
+fun downloadUrlToFile(url: String, destination: File) {
+    destination.parentFile.mkdirs()
+    val temp = File(destination.parentFile, "${destination.name}.download")
+    URI(url).toURL().openStream().use { input ->
+        temp.outputStream().use { output -> input.copyTo(output) }
+    }
+    Files.move(temp.toPath(), destination.toPath(), StandardCopyOption.REPLACE_EXISTING)
+}
+
+fun extractZip(archive: File, destination: File) {
+    destination.mkdirs()
+    ZipFile(archive).use { zip ->
+        zip.entries().asSequence().forEach { entry ->
+            if (entry.isDirectory) return@forEach
+            val out = File(destination, entry.name)
+            out.parentFile.mkdirs()
+            zip.getInputStream(entry).use { input ->
+                out.outputStream().use { output -> input.copyTo(output) }
+            }
+        }
+    }
+}
+
 fun jpackageCompatibleVersion(version: String): String {
     val versionCore = version.substringBefore('-').substringBefore('+').trim()
     val parts = versionCore.split('.').filter { it.isNotBlank() }
@@ -782,21 +813,29 @@ val windowsPlayerRuntimeOutput = layout.buildDirectory.dir("native/windows-runti
 if (isWindowsHost) {
     windowsPlayerBridgeOutput.get().asFile.parentFile.mkdirs()
 }
+val windowsWebView2Version = "1.0.4078.44"
+val windowsWebView2DownloadedRoot = layout.buildDirectory
+    .dir("webview2/Microsoft.Web.WebView2.$windowsWebView2Version")
+    .get()
+    .asFile
 val windowsWebView2Root = providers.gradleProperty("nuvio.webview2.dir").orNull
     ?.takeIf { it.isNotBlank() }
     ?.let(::File)
     ?: newestDirectory(File(System.getProperty("user.home"), ".nuget/packages/microsoft.web.webview2"))
-    ?: File("__missing_webview2__")
+        ?.takeIf { File(it, "build/native/include/WebView2.h").exists() }
+    ?: windowsWebView2DownloadedRoot
 val windowsWebView2IncludeDir = File(windowsWebView2Root, "build/native/include")
 val windowsWebView2NativeDir = File(windowsWebView2Root, "build/native/$windowsPlayerBridgeArch")
 val windowsWebView2LoaderLib = File(windowsWebView2NativeDir, "WebView2Loader.dll.lib")
 val windowsWebView2LoaderDll = File(windowsWebView2NativeDir, "WebView2Loader.dll")
 val bundledWindowsLibmpvRuntimeDir = layout.projectDirectory.dir("src/desktopMain/native/windows/runtime").asFile
+val windowsLibmpvDownloadedDir = layout.buildDirectory.dir("native/windows-libmpv").get().asFile
 val windowsLibmpvRuntimeDirOverride = providers.gradleProperty("nuvio.windows.libmpv.runtimeDir").orNull
     ?.takeIf { it.isNotBlank() }
     ?.let(::File)
 val windowsLibmpvRuntimeDir = windowsLibmpvRuntimeDirOverride
-    ?: bundledWindowsLibmpvRuntimeDir.takeIf { File(it, "libmpv-2.dll").exists() }
+    ?: bundledWindowsLibmpvRuntimeDir.takeIf { isUsableNativeBinary(File(it, "libmpv-2.dll")) }
+    ?: windowsLibmpvDownloadedDir
 val windowsLibmpvDllOverride = providers.gradleProperty("nuvio.windows.libmpv.dll").orNull
     ?.takeIf { it.isNotBlank() }
     ?.let(::File)
@@ -832,22 +871,68 @@ val windowsVcvarsRelativePath = when (windowsPlayerBridgeArch) {
 val windowsVcvarsPath = providers.gradleProperty("nuvio.windows.vcvars.path").orNull
     ?.takeIf { it.isNotBlank() }
 val windowsPlayerBridgeJavaHome = providers.systemProperty("java.home").get()
-val missingWindowsPlayerBridgeInputs = listOfNotNull(
-    "WebView2.h".takeUnless { windowsWebView2IncludeDir.resolve("WebView2.h").exists() },
-    "WebView2Loader.dll.lib".takeUnless { windowsWebView2LoaderLib.exists() },
-)
-val missingWindowsPlayerBridgeMessage = """
-    Windows desktop player bridge inputs are missing: ${missingWindowsPlayerBridgeInputs.joinToString()}.
-    Install the Microsoft.Web.WebView2 NuGet package or pass -Pnuvio.webview2.dir=C:/path/to/microsoft.web.webview2/version.
-    libmpv is loaded at runtime; pass -Pnuvio.windows.libmpv.runtimeDir=C:/path/to/mpv-dlls to bundle it.
-""".trimIndent()
-val windowsPlayerBridgeCommand = if (missingWindowsPlayerBridgeInputs.isNotEmpty()) {
-    listOf(
-        "cmd",
-        "/c",
-        "echo ${missingWindowsPlayerBridgeMessage.replace("\n", " ")} 1>&2 && exit /b 1",
-    )
-} else {
+val resolveWindowsPlayerNativeDeps = tasks.register("resolveWindowsPlayerNativeDeps") {
+    enabled = isWindowsHost
+    notCompatibleWithConfigurationCache("Downloads host-local WebView2 SDK and libmpv runtime.")
+    outputs.file(File(windowsWebView2DownloadedRoot, "build/native/include/WebView2.h"))
+    outputs.file(File(windowsLibmpvDownloadedDir, "libmpv-2.dll"))
+    doLast {
+        if (!windowsWebView2IncludeDir.resolve("WebView2.h").exists() ||
+            !windowsWebView2LoaderLib.exists()
+        ) {
+            val nupkg = File(windowsWebView2DownloadedRoot.parentFile, "Microsoft.Web.WebView2.$windowsWebView2Version.nupkg")
+            logger.lifecycle("Downloading Microsoft.Web.WebView2 $windowsWebView2Version...")
+            downloadUrlToFile(
+                "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/$windowsWebView2Version",
+                nupkg,
+            )
+            extractZip(nupkg, windowsWebView2DownloadedRoot)
+            if (!File(windowsWebView2DownloadedRoot, "build/native/include/WebView2.h").exists()) {
+                error("WebView2.h was not found after extracting Microsoft.Web.WebView2 $windowsWebView2Version")
+            }
+        }
+        val bundledLibmpv = File(bundledWindowsLibmpvRuntimeDir, "libmpv-2.dll")
+        val downloadedLibmpv = File(windowsLibmpvDownloadedDir, "libmpv-2.dll")
+        when {
+            windowsLibmpvRuntimeDirOverride != null -> Unit
+            isUsableNativeBinary(bundledLibmpv) -> {
+                if (!isUsableNativeBinary(downloadedLibmpv)) {
+                    windowsLibmpvDownloadedDir.mkdirs()
+                    Files.copy(bundledLibmpv.toPath(), downloadedLibmpv.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                }
+            }
+            isUsableNativeBinary(downloadedLibmpv) -> Unit
+            else -> {
+                logger.lifecycle("Downloading libmpv-2.dll from NuvioDesktop (fork Git LFS is unavailable)...")
+                downloadUrlToFile(
+                    "https://media.githubusercontent.com/media/NuvioMedia/NuvioDesktop/9b8494d0535b3ec1382718138d71460b1202fc49/composeApp/src/desktopMain/native/windows/runtime/libmpv-2.dll",
+                    downloadedLibmpv,
+                )
+                if (!isUsableNativeBinary(downloadedLibmpv)) {
+                    error("Downloaded libmpv-2.dll is unusable (${downloadedLibmpv.length()} bytes)")
+                }
+            }
+        }
+        val prebuiltBridge = layout.projectDirectory.file("src/desktopMain/native/windows/prebuilt/player_bridge.dll").asFile
+        val outputBridge = windowsPlayerBridgeOutput.get().asFile
+        if (!outputBridge.exists() && prebuiltBridge.exists()) {
+            outputBridge.parentFile.mkdirs()
+            Files.copy(prebuiltBridge.toPath(), outputBridge.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            val prebuiltLoader = File(prebuiltBridge.parentFile, "WebView2Loader.dll")
+            if (prebuiltLoader.exists()) {
+                Files.copy(
+                    prebuiltLoader.toPath(),
+                    File(outputBridge.parentFile, "WebView2Loader.dll").toPath(),
+                    StandardCopyOption.REPLACE_EXISTING,
+                )
+            }
+            File(outputBridge.parentFile, "player_bridge.lib").createNewFile()
+            File(outputBridge.parentFile, "player_bridge.pdb").createNewFile()
+            logger.lifecycle("Using prebuilt Windows player_bridge.dll (MSVC not required for :composeApp:run).")
+        }
+    }
+}
+val windowsPlayerBridgeCommand = run {
     val sourceFile = windowsPlayerBridgeSource.asFile
     val outputFile = windowsPlayerBridgeOutput.get().asFile
     val importLibFile = windowsPlayerBridgeImportLib.get().asFile
@@ -893,10 +978,21 @@ val windowsPlayerBridgeCommand = if (missingWindowsPlayerBridgeInputs.isNotEmpty
           ${'$'}vswhere = ${psSingleQuote(windowsVsWhere.absolutePath)}
           if (Test-Path -LiteralPath ${'$'}vswhere) {
             ${'$'}vcvars = & ${'$'}vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -find ${psSingleQuote(windowsVcvarsRelativePath)} | Select-Object -First 1
+            if ([string]::IsNullOrWhiteSpace(${'$'}vcvars)) {
+              ${'$'}vcvars = & ${'$'}vswhere -latest -products '*' -find ${psSingleQuote(windowsVcvarsRelativePath)} | Select-Object -First 1
+            }
           }
         }
+        if ([string]::IsNullOrWhiteSpace(${'$'}vcvars)) {
+          ${'$'}fallback = @(
+            'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat',
+            'C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat',
+            'C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat'
+          ) | Where-Object { Test-Path -LiteralPath ${'$'}_ } | Select-Object -First 1
+          ${'$'}vcvars = ${'$'}fallback
+        }
         if ([string]::IsNullOrWhiteSpace(${'$'}vcvars) -or -not (Test-Path -LiteralPath ${'$'}vcvars)) {
-          Write-Error 'Visual Studio C++ toolchain was not found. Install MSVC or pass -Pnuvio.windows.vcvars.path=C:\path\to\vcvars64.bat.'
+          Write-Error 'Visual Studio C++ toolchain was not found. Install "Desktop development with C++" or VS Build Tools with the VCTools workload, then rerun.'
           exit 1
         }
         ${'$'}vcvars = ([string]${'$'}vcvars).Trim()
@@ -927,6 +1023,7 @@ val windowsPlayerBridgeCommand = if (missingWindowsPlayerBridgeInputs.isNotEmpty
 val buildWindowsPlayerBridge = tasks.register<Exec>("buildWindowsPlayerBridge") {
     notCompatibleWithConfigurationCache("Builds a host-local player bridge against WebView2 and libmpv for Windows.")
     enabled = isWindowsHost
+    dependsOn(resolveWindowsPlayerNativeDeps)
     inputs.file(windowsPlayerBridgeSource)
     if (windowsWebView2IncludeDir.exists()) {
         inputs.dir(windowsWebView2IncludeDir)
@@ -943,22 +1040,16 @@ val buildWindowsPlayerBridge = tasks.register<Exec>("buildWindowsPlayerBridge") 
 
 val prepareWindowsPlayerRuntime = tasks.register<Sync>("prepareWindowsPlayerRuntime") {
     enabled = isWindowsHost
+    dependsOn(resolveWindowsPlayerNativeDeps)
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     into(windowsPlayerRuntimeOutput)
-    if (windowsWebView2LoaderDll.exists()) {
-        from(windowsWebView2LoaderDll)
-    }
+    from(windowsWebView2LoaderDll)
+    from(layout.projectDirectory.file("src/desktopMain/native/windows/prebuilt/WebView2Loader.dll"))
     windowsCppRuntimeDlls.forEach { dllFile ->
         from(dllFile)
     }
-    when {
-        windowsLibmpvRuntimeDir?.exists() == true -> {
-            from(windowsLibmpvRuntimeDir) {
-                include("*.dll")
-            }
-        }
-        windowsLibmpvDll?.exists() == true -> {
-            from(windowsLibmpvDll)
-        }
+    from(windowsLibmpvRuntimeDir) {
+        include("*.dll")
     }
 }
 

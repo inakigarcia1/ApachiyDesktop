@@ -16,7 +16,7 @@ The Kotlin package stays `com.nuvio.app`. Desktop packages ship as **Apachiy**
    - `APACHIY_API_BASE_URL`
    - the same TMDB / Trakt / Simkl keys you use on Apachiy Mobile and TV
 3. Leave `NUVIO_SUPABASE_FALLBACK_URL` empty.
-4. Ensure JDK 17+ and the Windows desktop player toolchain (MSVC, WebView2, bundled `libmpv-2.dll`).
+4. First Windows run downloads the WebView2 SDK and `libmpv-2.dll` automatically. A prebuilt `player_bridge.dll` is included so you can run without installing MSVC. JDK 17+.
 5. Run:
 
 ```powershell
