@@ -348,6 +348,16 @@
     <string name="compose_auth_create_account">Create Account</string>
     <string name="compose_auth_dont_have_account">Don't have an account? </string>
     <string name="compose_auth_email">Email</string>
+    <string name="compose_auth_link_cancel">Cancel</string>
+    <string name="compose_auth_link_code_expired">This code expired.</string>
+    <string name="compose_auth_link_creating_code">Creating code…</string>
+    <string name="compose_auth_link_failed">Link sign-in failed.</string>
+    <string name="compose_auth_link_open">Open apachiy.org/link</string>
+    <string name="compose_auth_link_open_failed">Couldn't open the link.</string>
+    <string name="compose_auth_link_sign_in">Sign in with a link</string>
+    <string name="compose_auth_link_signing_in">Signing in…</string>
+    <string name="compose_auth_link_try_again">Try Again</string>
+    <string name="compose_auth_link_waiting">Waiting for approval…</string>
     <string name="compose_auth_or_separator">  or  </string>
     <string name="compose_auth_password">Password</string>
     <string name="compose_auth_sign_in_subtitle">Sign in to access your library and progress</string>
@@ -355,7 +365,7 @@
     <string name="compose_auth_sign_up_subtitle">Sign up to sync your data across devices</string>
     <string name="compose_auth_sign_up">Sign Up</string>
     <string name="compose_auth_store_locally">Your data will only be stored locally</string>
-    <string name="compose_auth_tagline">Watch your library, anywhere</string>
+    <string name="compose_auth_tagline">Streaming as it always should have been</string>
     <string name="compose_auth_terms_prefix">By signing up, I agree to the</string>
     <string name="compose_auth_terms_link">Terms</string>
     <string name="compose_auth_welcome_back">Welcome Back</string>
@@ -530,7 +540,7 @@
     <string name="compose_settings_root_general_section">GENERAL</string>
     <string name="compose_settings_root_integrations_description">Manage available integrations</string>
     <string name="compose_settings_root_notifications_description">Manage episode release alerts and send a test notification.</string>
-    <string name="compose_settings_root_privacy_policy_description">Learn how Nuvio handles your data</string>
+    <string name="compose_settings_root_privacy_policy_description">Learn how Apachiy handles your data</string>
     <string name="compose_settings_root_streams_description">Stream result display and badge URL rules.</string>
     <string name="compose_settings_root_switch_profile_description">Change to a different profile.</string>
     <string name="compose_settings_root_switch_profile_title">Switch Profile</string>
@@ -1517,7 +1527,7 @@
     <string name="home_continue_watching_watched">%1$s watched</string>
     <string name="home_continue_watching_hours_minutes_left">%1$dh %2$dm left</string>
     <string name="home_continue_watching_minutes_left">%1$dm left</string>
-    <string name="home_empty_no_active_addons_message">Install and validate at least one addon before loading catalog rows on Home.</string>
+    <string name="home_empty_no_active_addons_message">Manage your account at apachiy.org/dashboard.</string>
     <string name="home_empty_no_rows_message">Installed addons do not currently expose board-compatible catalogs without required extras.</string>
     <string name="home_empty_no_rows_title">No home rows available</string>
     <string name="home_view_details">View Details</string>
@@ -1666,7 +1676,7 @@
     <string name="addon_already_installed">That addon is already installed.</string>
     <string name="addon_invalid_url">Enter a valid addon URL</string>
     <string name="addon_load_manifest_failed">Unable to load manifest</string>
-    <string name="app_brand_name">Nuvio</string>
+    <string name="app_brand_name">Apachiy</string>
     <string name="auth_account_deletion_failed">Account deletion failed</string>
     <string name="auth_sign_in_failed">Sign-in failed</string>
     <string name="auth_sign_out_failed">Sign-out failed</string>
@@ -2300,4 +2310,11 @@
         <item quantity="one">%d title</item>
         <item quantity="other">%d titles</item>
     </plurals>
+    <string name="device_limit_title">Device limit reached</string>
+    <string name="device_limit_message">You have reached the maximum number of devices allowed for your account. To manage them, visit apachiy.org/dashboard/devices.</string>
+    <string name="device_limit_manage_devices">Manage devices</string>
+    <string name="subscription_inactive_title">No active subscription</string>
+    <string name="subscription_inactive_message">You don’t have an active subscription. Manage your plan at apachiy.org/dashboard.</string>
+    <string name="subscription_inactive_manage">Manage subscription</string>
+    <string name="player_loading_generic">Cargando…</string>
 </resources>

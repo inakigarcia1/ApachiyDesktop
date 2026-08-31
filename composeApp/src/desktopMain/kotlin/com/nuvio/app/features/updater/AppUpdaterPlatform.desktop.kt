@@ -34,16 +34,17 @@ private val desktopUpdaterHttpClient: HttpClient = HttpClient.newBuilder()
 actual object AppUpdaterPlatform {
     private val currentOs: DesktopUpdaterOs = DesktopUpdaterOs.current()
     private val store = DesktopStorage.store(desktopUpdaterPreferencesName)
-    actual val isDebugBuild: Boolean = false
+    actual val isDebugBuild: Boolean =
+        System.getProperty("compose.application.resources.dir").isNullOrBlank()
 
     actual val isSupported: Boolean = currentOs != DesktopUpdaterOs.UNKNOWN
 
     actual val releaseSource: AppUpdateReleaseSource = AppUpdateReleaseSource(
-        owner = "NuvioMedia",
-        repo = "NuvioDesktop",
+        owner = "inakigarcia1",
+        repo = "ApachiyDesktop",
         channelBranch = null,
         includePrereleases = true,
-        userAgent = "NuvioDesktop",
+        userAgent = "ApachiyDesktop",
     )
 
     actual val assetSelector: AppUpdateAssetSelector

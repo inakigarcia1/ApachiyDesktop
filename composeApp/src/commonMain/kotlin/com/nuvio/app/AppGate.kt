@@ -23,9 +23,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nuvio.app.core.account.AccountStatusRepository
 import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
 import com.nuvio.app.core.auth.DeviceSessionRegistration
+import com.nuvio.app.core.auth.RemoteLogoutWatcher
+import com.nuvio.app.core.device.DeviceRegistrar
 import com.nuvio.app.core.network.NetworkCondition
 import com.nuvio.app.core.network.NetworkStatusRepository
 import com.nuvio.app.core.sync.ProfileSettingsSync
@@ -140,6 +143,9 @@ internal fun AppGate(
     LaunchedEffect(Unit) {
         if (!ownsAppRuntime) return@LaunchedEffect
         AuthRepository.initialize()
+        DeviceRegistrar.startObserving()
+        AccountStatusRepository.startObserving()
+        RemoteLogoutWatcher.startObserving()
     }
 
     LaunchedEffect(Unit) {

@@ -12,6 +12,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import com.nuvio.app.core.network.DesktopIPv4FirstDns
 import java.util.concurrent.TimeUnit
 
 internal object TrailerExtractionPlatform {
@@ -28,6 +29,7 @@ internal object TrailerExtractionPlatform {
     )
 
     private val httpClient = OkHttpClient.Builder()
+        .dns(DesktopIPv4FirstDns())
         .connectTimeout(TRAILER_REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS)
         .readTimeout(TRAILER_REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS)
         .writeTimeout(TRAILER_REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS)
@@ -36,6 +38,7 @@ internal object TrailerExtractionPlatform {
         .build()
 
     private val probeClient = OkHttpClient.Builder()
+        .dns(DesktopIPv4FirstDns())
         .connectTimeout(2, TimeUnit.SECONDS)
         .readTimeout(2, TimeUnit.SECONDS)
         .followRedirects(true)

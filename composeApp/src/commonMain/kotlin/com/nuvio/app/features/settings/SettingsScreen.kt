@@ -1,5 +1,6 @@
 package com.nuvio.app.features.settings
 
+import com.nuvio.app.core.build.ApachiyProductSettings
 import com.nuvio.app.core.build.AppFeaturePolicy
 
 import androidx.compose.foundation.background
@@ -99,13 +100,35 @@ private val SettingsSearchRevealThreshold = 28.dp
 private const val SettingsSearchRevealAnimationMillis = 240L
 private const val SettingsSearchRevealHapticDelayMillis = 90L
 
-private fun SettingsPage.isEnabledByPolicy(): Boolean =
-    when (this) {
+private fun SettingsPage.isEnabledByPolicy(): Boolean {
+    val operatorVisible = ApachiyProductSettings.operatorSettingsVisible
+    return when (this) {
         SettingsPage.Notifications -> AppFeaturePolicy.notificationsEnabled
-        SettingsPage.Plugins -> AppFeaturePolicy.pluginsEnabled
-        SettingsPage.SupportersContributors -> AppFeaturePolicy.supportersContributorsPageEnabled
+        SettingsPage.Plugins -> AppFeaturePolicy.pluginsEnabled && operatorVisible
+        SettingsPage.SupportersContributors -> operatorVisible && AppFeaturePolicy.supportersContributorsPageEnabled
+        SettingsPage.LicensesAttributions -> false
+        SettingsPage.Advanced -> false
+        SettingsPage.Integrations,
+        SettingsPage.TmdbEnrichment,
+        SettingsPage.MdbListRatings,
+        SettingsPage.Debrid,
+        -> false
+        SettingsPage.ContentDiscovery,
+        SettingsPage.Addons,
+        -> operatorVisible
         else -> true
     }
+}
+
+private fun SettingsCategory.isVisibleInSidebar(): Boolean {
+    val operatorVisible = ApachiyProductSettings.operatorSettingsVisible
+    return when (this) {
+        SettingsCategory.Advanced -> false
+        SettingsCategory.About -> false
+        SettingsCategory.General -> true
+        SettingsCategory.Account -> true
+    }
+}
 
 @Composable
 fun SettingsScreen(
@@ -899,7 +922,7 @@ private fun TabletSettingsScreen(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                 Spacer(modifier = Modifier.height(10.dp))
-                SettingsCategory.entries.forEach { category ->
+                SettingsCategory.entries.filter { it.isVisibleInSidebar() }.forEach { category ->
                     SettingsSidebarItem(
                         label = stringResource(category.labelRes),
                         icon = category.icon,

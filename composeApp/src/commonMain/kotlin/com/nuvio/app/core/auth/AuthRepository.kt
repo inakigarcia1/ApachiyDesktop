@@ -37,6 +37,9 @@ object AuthRepository {
     private var sessionStatusJob: Job? = null
     private var validatedRemoteUserId: String? = null
 
+    var lastAuthKind: LastAuthKind = LastAuthKind.None
+        private set
+
     fun initialize() {
         if (initialized) return
         initialized = true
@@ -99,6 +102,15 @@ object AuthRepository {
         }
     }
 
+    suspend fun refreshCurrentSession(): Boolean =
+        runCatching {
+            SupabaseProvider.client.auth.refreshCurrentSession()
+            true
+        }.getOrElse { error ->
+            log.w(error) { "Failed to refresh current session" }
+            false
+        }
+
     @OptIn(ExperimentalUuidApi::class)
     fun signInAnonymously() {
         _error.value = null
@@ -113,12 +125,14 @@ object AuthRepository {
 
     suspend fun signUpWithEmail(email: String, password: String): Result<Unit> = runCatching {
         _error.value = null
+        lastAuthKind = LastAuthKind.SignUp
         SupabaseProvider.client.auth.signUpWith(Email) {
             this.email = email
             this.password = password
         }
         Unit
     }.onFailure { e ->
+        lastAuthKind = LastAuthKind.None
         log.e(e) { "Email sign-up failed" }
         _error.value = e.safeAuthErrorDescription()
             ?: getString(Res.string.auth_sign_up_failed)
@@ -126,11 +140,13 @@ object AuthRepository {
 
     suspend fun signInWithEmail(email: String, password: String): Result<Unit> = runCatching {
         _error.value = null
+        lastAuthKind = LastAuthKind.SignIn
         SupabaseProvider.client.auth.signInWith(Email) {
             this.email = email
             this.password = password
         }
     }.onFailure { e ->
+        lastAuthKind = LastAuthKind.None
         log.e(e) { "Email sign-in failed" }
         _error.value = e.safeAuthErrorDescription()
             ?: getString(Res.string.auth_sign_in_failed)

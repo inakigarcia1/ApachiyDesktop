@@ -60,10 +60,21 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
     @get:Input
     abstract val sentryEnvironment: Property<String>
 
+    @get:Input
+    abstract val apachiyApiBaseUrl: Property<String>
+
+    @get:Input
+    abstract val avatarPublicBaseUrl: Property<String>
+
     @TaskAction
     fun generate() {
         val props = Properties()
         localPropertiesFile.asFile.orNull?.takeIf { it.exists() }?.inputStream()?.use { props.load(it) }
+
+        val resolvedAvatarPublicBaseUrl = avatarPublicBaseUrl.get().trim().ifBlank {
+            val supabase = supabaseUrl.get().trim().trimEnd('/')
+            if (supabase.isNotBlank()) "$supabase/storage/v1/object/public/avatars" else ""
+        }
 
         val outDir = outputDir.get().asFile
         outDir.resolve("com/nuvio/app/core/network").apply {
@@ -76,6 +87,16 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
                 |    const val URL = "${supabaseUrl.get()}"
                 |    const val ANON_KEY = "${supabaseAnonKey.get()}"
                 |    const val FALLBACK_URL = "${supabaseFallbackUrl.get()}"
+                |}
+                """.trimMargin()
+            )
+            resolve("ApachiyConfig.kt").writeText(
+                """
+                |package com.nuvio.app.core.network
+                |
+                |object ApachiyConfig {
+                |    const val API_BASE_URL = "${apachiyApiBaseUrl.get()}"
+                |    const val AVATAR_PUBLIC_BASE_URL = "$resolvedAvatarPublicBaseUrl"
                 |}
                 """.trimMargin()
             )
@@ -107,7 +128,7 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
                 |object TraktConfig {
                 |    const val CLIENT_ID = "${props.getProperty("TRAKT_CLIENT_ID", "")}" 
                 |    const val CLIENT_SECRET = "${props.getProperty("TRAKT_CLIENT_SECRET", "")}" 
-                |    const val REDIRECT_URI = "${props.getProperty("TRAKT_REDIRECT_URI", "nuvio://auth/trakt")}" 
+                |    const val REDIRECT_URI = "${props.getProperty("TRAKT_REDIRECT_URI", "apachiy://auth/trakt")}" 
                 |}
                 """.trimMargin()
             )
@@ -121,8 +142,8 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
                 |
                 |object SimklConfig {
                 |    const val CLIENT_ID = "${props.getProperty("SIMKL_CLIENT_ID", "")}"
-                |    const val REDIRECT_URI = "${props.getProperty("SIMKL_REDIRECT_URI", "nuvio://auth/simkl")}"
-                |    const val APP_NAME = "${props.getProperty("SIMKL_APP_NAME", "nuvio")}"
+                |    const val REDIRECT_URI = "${props.getProperty("SIMKL_REDIRECT_URI", "apachiy://auth/simkl")}"
+                |    const val APP_NAME = "${props.getProperty("SIMKL_APP_NAME", "apachiy")}"
                 |}
                 """.trimMargin()
             )
@@ -500,7 +521,7 @@ val desktopReleaseVersionCode = (
     ?.toIntOrNull()
     ?: 1
 val desktopReleasePackageVersion = jpackageCompatibleVersion(desktopReleaseVersionName)
-val windowsMsiUpgradeUuid = "395990ee-9b8a-3548-922c-e7a23a495b8d"
+val windowsMsiUpgradeUuid = "a7c4e1f2-6b3d-4e89-9f12-8c5d6e7f8091"
 val iosDistribution = (
     providers.gradleProperty("nuvio.ios.distribution").orNull
         ?: System.getenv("NUVIO_IOS_DISTRIBUTION")
@@ -584,9 +605,11 @@ val generateRuntimeConfigs = tasks.register<GenerateRuntimeConfigsTask>("generat
     appVersionCode.set(releaseAppVersionCode)
     desktopAppVersionName.set(desktopReleaseVersionName)
     desktopAppVersionCode.set(desktopReleaseVersionCode)
-    supabaseUrl.set(runtimeConfigValue("NUVIO_SUPABASE_URL"))
-    supabaseAnonKey.set(runtimeConfigValue("NUVIO_SUPABASE_ANON_KEY"))
+    supabaseUrl.set(runtimeConfigValue("APACHIY_SUPABASE_URL"))
+    supabaseAnonKey.set(runtimeConfigValue("APACHIY_SUPABASE_ANON_KEY"))
     supabaseFallbackUrl.set(runtimeConfigValue("NUVIO_SUPABASE_FALLBACK_URL"))
+    apachiyApiBaseUrl.set(runtimeConfigValue("APACHIY_API_BASE_URL"))
+    avatarPublicBaseUrl.set(runtimeConfigValue("AVATAR_PUBLIC_BASE_URL"))
     sentryDsn.set(runtimeConfigValue("SENTRY_DSN"))
     sentryDesktopDsn.set(runtimeConfigValue("SENTRY_DESKTOP_DSN"))
     sentryEnvironment.set(
@@ -1204,8 +1227,11 @@ kotlin {
                     implementation(project(":composeMediaPlayer"))
                 }
                 implementation(libs.kotlinx.coroutines.swing)
-                implementation(libs.ktor.client.cio)
+                implementation(libs.ktor.client.okhttp)
                 implementation("com.squareup.okhttp3:okhttp:4.12.0")
+                implementation("io.coil-kt.coil3:coil-network-okhttp:${libs.versions.coil.get()}") {
+                    exclude(group = "org.jetbrains.skiko", module = "skiko")
+                }
                 implementation(libs.quickjs.kt)
                 implementation(libs.ksoup)
                 implementation(libs.sentry.jvm)
@@ -1248,6 +1274,7 @@ kotlin {
             implementation(libs.supabase.auth)
             implementation(libs.supabase.functions)
             implementation(libs.supabase.storage)
+            implementation(libs.supabase.realtime)
             implementation(libs.reorderable)
         }
         commonTest.dependencies {
@@ -1282,9 +1309,9 @@ compose.desktop {
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.AppImage)
-            packageName = "Nuvio"
+            packageName = "Apachiy"
             packageVersion = desktopReleasePackageVersion
-            vendor = "Nuvio Media"
+            vendor = "Apachiy"
             if (isMacHost) {
                 appResourcesRootDir.set(macosPlayerAppResourcesRoot)
             }
@@ -1296,7 +1323,7 @@ compose.desktop {
                 "jdk.unsupported",
             )
             macOS {
-                bundleID = "com.nuvio.media.desktop"
+                bundleID = "com.apachiy.desktop"
                 iconFile.set(project.file("src/desktopMain/resources/icons/nuvio-app-icon-transparent.icns"))
                 infoPlist {
                     extraKeysRawXml = """
@@ -1304,9 +1331,10 @@ compose.desktop {
                         <array>
                             <dict>
                                 <key>CFBundleURLName</key>
-                                <string>com.nuvio.media.desktop</string>
+                                <string>com.apachiy.desktop</string>
                                 <key>CFBundleURLSchemes</key>
                                 <array>
+                                    <string>apachiy</string>
                                     <string>nuvio</string>
                                     <string>stremio</string>
                                 </array>
@@ -1337,13 +1365,13 @@ compose.desktop {
                 upgradeUuid = windowsMsiUpgradeUuid
                 shortcut = true
                 menu = true
-                menuGroup = "Nuvio"
+                menuGroup = "Apachiy"
             }
             linux {
                 iconFile.set(project.file("src/desktopMain/resources/icons/nuvio-app-icon-transparent.png"))
-                debMaintainer = "contact@nuvio.tv"
+                debMaintainer = "contact@apachiy.org"
                 shortcut = true
-                menuGroup = "Nuvio"
+                menuGroup = "Apachiy"
                 appCategory = "AudioVideo"
             }
         }

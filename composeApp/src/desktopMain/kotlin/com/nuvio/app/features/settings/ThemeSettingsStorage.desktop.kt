@@ -67,7 +67,6 @@ internal actual object ThemeSettingsStorage {
 
     actual fun loadSelectedAppLanguage(): String? =
         store.getString(selectedAppLanguageKey)
-            ?: Locale.getDefault().toLanguageTag().takeIf { it.isNotBlank() }
 
     actual fun saveSelectedAppLanguage(languageCode: String) {
         store.putString(selectedAppLanguageKey, languageCode)
@@ -99,6 +98,6 @@ internal actual object ThemeSettingsStorage {
         payload.decodeSyncBoolean(liquidGlassNativeTabBarEnabledKey)?.let(::saveLiquidGlassNativeTabBarEnabled)
         payload.decodeSyncString(desktopNavigationLayoutKey)?.let(::saveDesktopNavigationLayout)
         payload.decodeSyncString(navBarStyleKey)?.let(::saveNavBarStyle)
-        applySelectedAppLanguage(loadSelectedAppLanguage() ?: AppLanguage.ENGLISH.code)
+        applySelectedAppLanguage(loadSelectedAppLanguage() ?: AppLanguage.SPANISH.code)
     }
 }

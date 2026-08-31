@@ -1,7 +1,9 @@
 package com.nuvio.app.features.addons
 
-import com.nuvio.app.core.storage.DesktopStorage
+import com.nuvio.app.core.build.AppVersionConfig
+import com.nuvio.app.core.network.ApachiyAddonAuthInterceptor
 import com.nuvio.app.core.network.DesktopIPv4FirstDns
+import com.nuvio.app.core.storage.DesktopStorage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -43,14 +45,36 @@ internal actual object AddonStorage {
     }
 }
 
-private val desktopHttpClient = OkHttpClient.Builder()
-    .dns(DesktopIPv4FirstDns())
-    .connectTimeout(60, TimeUnit.SECONDS)
-    .readTimeout(60, TimeUnit.SECONDS)
-    .writeTimeout(60, TimeUnit.SECONDS)
-    .followRedirects(true)
-    .followSslRedirects(true)
-    .build()
+internal object DesktopAddonHttpClientProvider {
+    private val client = OkHttpClient.Builder()
+        .dns(DesktopIPv4FirstDns())
+        .connectTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
+        .followRedirects(true)
+        .followSslRedirects(true)
+        .addInterceptor(ApachiyAddonAuthInterceptor())
+        .addInterceptor { chain ->
+            val request = chain.request()
+            if (request.header("User-Agent") != null) {
+                chain.proceed(request)
+            } else {
+                chain.proceed(
+                    request.newBuilder()
+                        .header(
+                            "User-Agent",
+                            "ApachiyDesktop/${AppVersionConfig.DESKTOP_VERSION_NAME.ifBlank { AppVersionConfig.VERSION_NAME }.ifBlank { "dev" }}",
+                        )
+                        .build(),
+                )
+            }
+        }
+        .build()
+
+    fun get(): OkHttpClient = client
+}
+
+private val desktopHttpClient = DesktopAddonHttpClientProvider.get()
 
 private const val truncationSuffix = "\n...[truncated]"
 

@@ -7,8 +7,10 @@ import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.functions.Functions
 import io.github.jan.supabase.postgrest.Postgrest
+import io.github.jan.supabase.realtime.Realtime
 import io.github.jan.supabase.storage.Storage
 import io.ktor.client.plugins.HttpRequestRetry
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.http.HttpHeaders
 import io.ktor.http.takeFrom
@@ -24,12 +26,20 @@ object SupabaseProvider {
     @OptIn(SupabaseInternal::class)
     private fun createClient(): SupabaseClient {
         val configuration = ServerConfigurationRepository.active.value
-        val userAgent = "NuvioMobile/${AppVersionConfig.VERSION_NAME.ifBlank { "dev" }}"
+        val userAgent = "ApachiyDesktop/${AppVersionConfig.DESKTOP_VERSION_NAME.ifBlank { AppVersionConfig.VERSION_NAME }.ifBlank { "dev" }}"
         return createSupabaseClient(
             supabaseUrl = configuration.backendUrl,
             supabaseKey = configuration.publishableKey,
         ) {
+            createSupabaseHttpEngine()?.let { engine ->
+                httpEngine = engine
+            }
             httpConfig {
+                install(HttpTimeout) {
+                    requestTimeoutMillis = 20_000
+                    connectTimeoutMillis = 15_000
+                    socketTimeoutMillis = 20_000
+                }
                 install(BackendRateLimitPlugin) {
                     coordinator = rateLimitCoordinator
                 }
@@ -99,6 +109,7 @@ object SupabaseProvider {
             install(Postgrest)
             install(Functions)
             install(Storage)
+            install(Realtime)
         }
     }
 

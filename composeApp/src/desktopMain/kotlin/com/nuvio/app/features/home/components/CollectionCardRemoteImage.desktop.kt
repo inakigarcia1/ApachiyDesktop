@@ -22,7 +22,9 @@ import coil3.request.ImageRequest
 import com.nuvio.app.core.ui.NuvioAsyncImage as AsyncImage
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
-import io.ktor.client.engine.cio.CIO
+import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.HttpTimeoutConfig
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import kotlinx.coroutines.Dispatchers
@@ -42,10 +44,10 @@ import org.jetbrains.skia.SamplingMode
 private const val MAX_FRAME_DIMENSION = 512
 
 private val desktopGifHttpClient by lazy {
-    HttpClient(CIO) {
+    HttpClient(OkHttp) {
         followRedirects = true
-        engine {
-            requestTimeout = 15_000
+        install(HttpTimeout) {
+            requestTimeoutMillis = 15_000
         }
     }
 }
