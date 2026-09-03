@@ -186,6 +186,8 @@ internal fun PlayerScreenRuntime.switchToP2pSourceStream(stream: StreamItem) {
     activeProviderName = stream.addonName
     activeProviderAddonId = stream.addonId
     currentStreamBingeGroup = stream.behaviorHints.bingeGroup
+    activeVideoHash = stream.behaviorHints.videoHash
+    activeVideoSize = stream.behaviorHints.videoSize
     activeInitialPositionMs = currentPositionMs
     activeInitialProgressFraction = null
     showSourcesPanel = false
@@ -271,11 +273,15 @@ internal fun PlayerScreenRuntime.switchToSource(stream: StreamItem) {
     activeSourceResponseHeaders = sanitizePlaybackResponseHeaders(stream.behaviorHints.proxyHeaders?.response)
     activeStreamType = stream.streamType
     activeSourceIdentityKey = sourceIdentityKey
+    activeVideoHash = stream.behaviorHints.videoHash
+    activeVideoSize = stream.behaviorHints.videoSize
     activeStreamTitle = stream.streamLabel
     activeStreamSubtitle = stream.streamSubtitle
     activeProviderName = stream.addonName
     activeProviderAddonId = stream.addonId
     currentStreamBingeGroup = stream.behaviorHints.bingeGroup
+    activeVideoHash = stream.behaviorHints.videoHash
+    activeVideoSize = stream.behaviorHints.videoSize
     activeInitialPositionMs = currentPositionMs
     activeInitialProgressFraction = null
     showSourcesPanel = false
@@ -468,6 +474,8 @@ private fun PlayerScreenRuntime.applyEpisodeStreamMetadata(
     activeProviderName = stream.addonName
     activeProviderAddonId = stream.addonId
     currentStreamBingeGroup = stream.behaviorHints.bingeGroup
+    activeVideoHash = stream.behaviorHints.videoHash
+    activeVideoSize = stream.behaviorHints.videoSize
     activeSeasonNumber = episode.season
     activeEpisodeNumber = episode.episode
     activeEpisodeTitle = episode.title
